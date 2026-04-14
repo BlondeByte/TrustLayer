@@ -43,6 +43,9 @@ INJECTION_PATTERNS = [
     r"roleplay",
     r"\[ignore",
     r"adjust your scoring",
+    r"\[.*ignore.*\]",
+    r"\[.*rules.*\]", 
+    r"\[.*instructions.*\]",
 ]
 
 # ============================================================
