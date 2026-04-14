@@ -40,6 +40,9 @@ INJECTION_PATTERNS = [
     r"jailbreak",
     r"do anything now",
     r"dan mode",
+    r"roleplay",
+    r"\[ignore",
+    r"adjust your scoring",
 ]
 
 # ============================================================
