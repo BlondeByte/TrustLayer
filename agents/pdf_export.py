@@ -270,7 +270,7 @@ def export_pdf(report_markdown: str, filepath_md: str) -> str | None:
     try:
         from weasyprint import HTML, CSS
         from weasyprint.text.fonts import FontConfiguration
-    except ImportError:
+    except (ImportError, OSError):
         print("[PDF Export] weasyprint not installed — skipping PDF generation.")
         print("[PDF Export] Run: pip3 install weasyprint markdown")
         audit_log("PDF_EXPORT_SKIPPED", "weasyprint not installed")

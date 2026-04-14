@@ -203,22 +203,16 @@ Analyze and prepare the following text for TrustLayer analysis:
     )
 
     raw = response.content[0].text
-raw = raw.strip()
-if raw.startswith('```'):
-    raw = raw.split('```')[1]
-    if raw.startswith('json'):
-        raw = raw[4:]
-raw = raw.strip()
-
-raw = raw.strip()
-if raw.startswith('```'):
-    raw = raw.split('```')[1]
-    if raw.startswith('json'):
-        raw = raw[4:]
-raw = raw.strip()
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    raw = raw.strip()
 
 
-try:
+
+    try:
         context = json.loads(raw)
         # Inject our own injection flag regardless of what Claude returned
         context["injection_flagged"] = injection_detected

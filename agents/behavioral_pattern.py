@@ -139,19 +139,14 @@ Return JSON only.
     )
 
     raw = response.content[0].text
-raw = raw.strip()
-if raw.startswith('```'):
-    raw = raw.split('```')[1]
-    if raw.startswith('json'):
-        raw = raw[4:]
-raw = raw.strip()
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    raw = raw.strip()
 
-raw = raw.strip()
-if raw.startswith('```'):
-    raw = raw.split('```')[1]
-    if raw.startswith('json'):
-        raw = raw[4:]
-raw = raw.strip()
+
 
 
     try:
