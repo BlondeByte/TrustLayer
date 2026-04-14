@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 report_*.md
 .DS_Store
+trustlayer_audit.log
+reports/

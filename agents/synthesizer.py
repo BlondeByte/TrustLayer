@@ -1,11 +1,35 @@
 import anthropic
 import json
+import logging
+import os
 from datetime import datetime
+from agents.pdf_export import export_pdf
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = anthropic.Anthropic()
+# ============================================================
+# LOGGING
+# ============================================================
+logging.basicConfig(
+    filename="trustlayer_audit.log",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+def audit_log(event: str, detail: str = ""):
+    logging.info(f"{event} | {detail}")
+
+# ============================================================
+# CONFIG
+# ============================================================
+
+REPORTS_DIR = "reports"  # all reports go here, not root dir
+MAX_TEXT_IN_REPORT = 500  # chars of original text shown in report — privacy control
+
+# ============================================================
+# CLAUDE PROMPT
+# ============================================================
 
 SYNTHESIZER_SYSTEM_PROMPT = """
 You are the Report Synthesizer Agent for TrustLayer by blondebytesecurity.
@@ -19,6 +43,9 @@ into a clean, professional, branded report.
 The report must be useful to both technical and non-technical readers.
 Write as if presenting findings to a business owner who needs to
 make a decision based on this content.
+
+IMPORTANT: Do NOT reproduce large portions of the original analyzed text
+in your report. Reference it only briefly if needed for context.
 
 Structure your report exactly as follows in markdown:
 
@@ -131,6 +158,38 @@ Emoji guide: 🤖 LLM signal | ⚠️ Ambiguous | ✅ Human/Verified | ❌ Risk
 Respond with the markdown report only. No preamble. No JSON.
 """
 
+# ============================================================
+# REPORT SAVING
+# ============================================================
+
+def save_report(report: str, timestamp: str) -> str:
+    """
+    Saves report to reports/ directory.
+    Returns filepath or error message.
+    """
+    try:
+        os.makedirs(REPORTS_DIR, exist_ok=True)
+        filename = f"trustlayer_report_{timestamp}.md"
+        filepath = os.path.join(REPORTS_DIR, filename)
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(report)
+
+        audit_log("REPORT_SAVED", f"filepath={filepath}")
+        return filepath
+
+    except OSError as e:
+        audit_log("REPORT_SAVE_FAILED", f"error={str(e)}")
+        print(f"[Synthesizer] ⚠️  Could not save report: {str(e)}")
+        return None
+
+
+# ============================================================
+# MAIN AGENT FUNCTION
+# ============================================================
+
+client = anthropic.Anthropic()
+
 def synthesize_report(confidence_output: dict) -> str:
     """
     Receives fully enriched output from all agents.
@@ -140,9 +199,15 @@ def synthesize_report(confidence_output: dict) -> str:
     """
     print("[Synthesizer] Generating TrustLayer report...\n")
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     mode = confidence_output.get("mode", "both")
-    original_text = confidence_output["original_text"]
-    context = confidence_output["context"]
+    original_text = confidence_output.get("original_text", "")
+    context = confidence_output.get("context")
+    injection_flagged = confidence_output.get("injection_flagged", False)
+
+    # Privacy control — only pass a snippet of original text to synthesizer
+    # Full text already analyzed upstream — synthesizer only needs context
+    text_snippet = original_text[:MAX_TEXT_IN_REPORT] + ("..." if len(original_text) > MAX_TEXT_IN_REPORT else "")
 
     # Authenticity findings
     linguistic_findings = confidence_output.get("linguistic_findings")
@@ -176,9 +241,16 @@ def synthesize_report(confidence_output: dict) -> str:
     auth_score = round((ling_score + beh_score) / 2, 1) if (ling_score and beh_score) else "N/A"
     cred_score = round((rel_score + con_score + conf_score) / 3, 1) if (rel_score and con_score and conf_score) else "N/A"
 
+    audit_log("SYNTHESIZER_START", f"mode={mode} auth_score={auth_score} cred_score={cred_score} injection_flagged={injection_flagged}")
+
+    # Add injection warning to report if flagged
+    injection_warning = ""
+    if injection_flagged:
+        injection_warning = "\n\n⚠️ NOTE: This content contained patterns consistent with prompt injection attempts. Analysis proceeded on content only."
+
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=3000,
+        max_tokens=4000,  # increased to avoid silent truncation
         system=SYNTHESIZER_SYSTEM_PROMPT,
         messages=[
             {
@@ -186,9 +258,10 @@ def synthesize_report(confidence_output: dict) -> str:
                 "content": f"""
 DateTime: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 Mode: {mode.upper()}
+Injection Flagged: {injection_flagged}
 
-Original Text Analyzed:
-{original_text}
+Original Text Snippet (first {MAX_TEXT_IN_REPORT} chars only):
+{text_snippet}
 
 Orchestrator Context:
 {json.dumps(context, indent=2)}
@@ -221,6 +294,7 @@ Confidence Language Findings:
 {json.dumps(confidence_findings, indent=2)}
 
 Credibility Score: {cred_score}/10
+{injection_warning}
 
 Generate the full TrustLayer report now.
                 """
@@ -230,17 +304,24 @@ Generate the full TrustLayer report now.
 
     report = response.content[0].text
 
+    # Check for potential truncation
+    if response.stop_reason == "max_tokens":
+        audit_log("REPORT_TRUNCATED", f"hit max_tokens limit at 4000")
+        print("[Synthesizer] ⚠️  Report may be truncated — hit token limit.")
+        report += "\n\n*⚠️ Note: Report may be incomplete due to length.*"
+
     # Save report
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"trustlayer_report_{timestamp}.md"
-
-    with open(filename, "w") as f:
-        f.write(report)
-
+    filepath = save_report(report, timestamp)
+    if filepath:
+        print(f"[Synthesizer] Report saved: {filepath}\n")
+        # Auto-generate PDF
+        export_pdf(report, filepath)
+    
     print(f"[Synthesizer] Report complete.")
-    print(f"[Synthesizer] Saved as {filename}\n")
     print("=" * 60)
     print(report)
     print("=" * 60)
+
+    audit_log("SYNTHESIZER_COMPLETE", f"timestamp={timestamp} filepath={filepath or 'SAVE_FAILED'}")
 
     return report
