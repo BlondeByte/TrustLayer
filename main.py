@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from agents.orchestrator import orchestrate
+from agents.content_classifier import classify_content          # v0.3 — NEW
 from agents.linguistic_analysis import analyze_linguistics
 from agents.behavioral_pattern import analyze_behavior
 from agents.citation_extraction import extract_citations
@@ -13,6 +14,7 @@ from agents.relevance import assess_relevance
 from agents.consistency import analyze_consistency
 from agents.confidence_language import analyze_confidence_language
 from agents.synthesizer import synthesize_report
+
 
 def get_mode() -> str:
     print("\nSelect analysis mode:")
@@ -31,6 +33,7 @@ def get_mode() -> str:
         else:
             print("Please enter 1, 2, or 3.")
 
+
 def get_input() -> str:
     print("\nHow would you like to submit content?")
     print("  [1] Paste text")
@@ -45,6 +48,7 @@ def get_input() -> str:
         else:
             print("Please enter 1 or 2.")
 
+
 def get_text_input() -> str:
     print("\nPaste your text below.")
     print("When finished press Enter then type END and press Enter.\n")
@@ -58,6 +62,7 @@ def get_text_input() -> str:
 
     return "\n".join(lines)
 
+
 def get_url_input() -> str:
     import requests
     url = input("\nEnter URL: ").strip()
@@ -66,8 +71,7 @@ def get_url_input() -> str:
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
-            # Trim to avoid token overflow
-            content = response.text[:5000]
+            content = response.text[:15000]  # v0.3 — increased from 5000 to match agent analysis window
             print(f"[TrustLayer] Content retrieved successfully.\n")
             return content
         else:
@@ -77,9 +81,10 @@ def get_url_input() -> str:
         print(f"[TrustLayer] Error fetching URL: {str(e)}")
         sys.exit(1)
 
+
 def main():
     print("\n" + "=" * 60)
-    print("  🔐 TrustLayer")
+    print("  🔐 TrustLayer v0.3")
     print("  Content Intelligence System")
     print("  by blondebytesecurity")
     print("=" * 60)
@@ -97,9 +102,10 @@ def main():
     print(f"\n[TrustLayer] Starting {mode.upper()} analysis...\n")
     print("=" * 60 + "\n")
 
-    # Run the full agent chain
+    # Agent chain — v0.3 adds classify_content between orchestrate and analyze_linguistics
     orchestrator_output    = orchestrate(text_input, mode)
-    linguistic_output      = analyze_linguistics(orchestrator_output)
+    classifier_output      = classify_content(orchestrator_output)      # v0.3 — NEW
+    linguistic_output      = analyze_linguistics(classifier_output)
     behavioral_output      = analyze_behavior(linguistic_output)
     citation_output        = extract_citations(behavioral_output)
     fetch_output           = fetch_and_assess(citation_output)
@@ -109,6 +115,7 @@ def main():
     final_report           = synthesize_report(confidence_output)
 
     print("\n[TrustLayer] Analysis complete. 🔐\n")
+
 
 if __name__ == "__main__":
     main()
